@@ -25,3 +25,9 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# uploaded images (use cloud storage in production)
+public/uploads/
+
+# pnpm store
+.pnpm-store/
