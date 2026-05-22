@@ -58,8 +58,10 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
       }
 
       body {
+        height: 100vh;
         min-height: 100vh;
         margin: 0;
+        overflow: hidden;
         background:
           linear-gradient(90deg, rgba(255, 48, 72, 0.08) 1px, transparent 1px),
           linear-gradient(0deg, rgba(255, 48, 72, 0.055) 1px, transparent 1px),
@@ -80,7 +82,11 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
       }
 
       .shell {
+        display: flex;
+        overflow: hidden;
+        flex-direction: column;
         width: min(1480px, calc(100% - 32px));
+        height: 100vh;
         min-height: 100vh;
         margin: 0 auto;
         padding: 18px 0 28px;
@@ -357,14 +363,17 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
 
       .workspace {
         display: grid;
+        flex: 1 1 auto;
         grid-template-columns: minmax(0, 1fr) minmax(360px, 0.86fr);
         gap: 16px;
+        min-height: 0;
       }
 
       .editor,
       .preview {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
+        min-height: 0;
         overflow: hidden;
       }
 
@@ -487,7 +496,8 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
 
       .editor textarea {
         width: 100%;
-        min-height: calc(100vh - 206px);
+        height: 100%;
+        min-height: 0;
         padding: 18px;
         border: 0;
         border-radius: 0;
@@ -496,7 +506,8 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
         font-size: 15px;
         line-height: 1.7;
-        resize: vertical;
+        overflow: auto;
+        resize: none;
       }
 
       .editor textarea:focus {
@@ -506,7 +517,7 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
 
       .preview-body {
         overflow: auto;
-        min-height: calc(100vh - 239px);
+        min-height: 0;
         padding: 22px;
       }
 
@@ -586,6 +597,7 @@ const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
       @media (max-width: 1040px) {
         .workspace {
           grid-template-columns: 1fr;
+          grid-template-rows: minmax(0, 1fr) minmax(220px, 0.85fr);
         }
       }
 
@@ -804,7 +816,7 @@ Describe the fix.`;
           const stripMarkdown = (value) =>
             value
               .replace(/!\[[^\]]*]\([^)]+\)/g, '')
-              .replace(/\[[^\]]+]\([^)]+\)/g, '$1')
+              .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
               .replace(/[`*_>#-]/g, '')
               .replace(/\s+/g, ' ')
               .trim();
