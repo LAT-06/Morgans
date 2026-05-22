@@ -1,0 +1,142 @@
+---
+import { getCollection } from 'astro:content';
+import BlogLayout from '../layouts/BlogLayout.astro';
+
+const writeups = (await getCollection('writeups', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime(),
+);
+
+const tags = [...new Set(writeups.flatMap((entry) => entry.data.tags))].sort();
+const categories = [...new Set(writeups.map((entry) => entry.data.category))].sort();
+const latest = writeups[0];
+
+const formatDate = (date: Date) =>
+  new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+---
+
+<BlogLayout
+  title="Morgan Writeups"
+  description="Security writeups, exploit notes, and reproducible research."
+>
+  <section class="page-shell hero">
+    <div class="hero-copy">
+      <p class="eyebrow">WRITEUPS / RED NOTES</p>
+      <h1>Security research with a dark red edge.</h1>
+      <p>
+        A focused space for CTF notes, bug bounty reports, exploit paths, and fixes. Dark mode
+        keeps the hacker-console tone; light mode switches into a quieter luxury reading surface.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="#writeups">Read writeups</a>
+        <a class="button" href="/admin/">Open CMS</a>
+      </div>
+      <div class="stats-row" aria-label="Blog stats">
+        <div class="stat">
+          <strong>{writeups.length}</strong>
+          <span>published</span>
+        </div>
+        <div class="stat">
+          <strong>{categories.length}</strong>
+          <span>categories</span>
+        </div>
+        <div class="stat">
+          <strong>{tags.length}</strong>
+          <span>tags tracked</span>
+        </div>
+      </div>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <img src="/images/writeup-console.svg" alt="" width="760" height="690" />
+    </div>
+  </section>
+
+  <section id="writeups" class="page-shell">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Latest research</p>
+        <h2>Writeups</h2>
+      </div>
+      {
+        latest && (
+          <p>
+            Latest: <strong>{latest.data.title}</strong> · {formatDate(latest.data.pubDate)}
+          </p>
+        )
+      }
+    </div>
+
+    <div class="writeup-grid">
+      <aside class="filter-panel" aria-label="Writeup filters">
+        <h3>Search</h3>
+        <input
+          class="search-input"
+          type="search"
+          placeholder="Search title, tag, target"
+          data-search
+          autocomplete="off"
+        />
+        <div class="tag-list" aria-label="Tag filters">
+          <button class="tag active" type="button" data-tag="all">All</button>
+          {tags.map((tag) => <button class="tag" type="button" data-tag={tag}>{tag}</button>)}
+        </div>
+      </aside>
+
+      <div class="writeup-list" data-list>
+        {
+          writeups.map((entry) => (
+            <a
+              class="writeup-card"
+              href={`/writeups/${entry.id}/`}
+              data-card
+              data-search-text={`${entry.data.title} ${entry.data.description} ${entry.data.target ?? ''} ${entry.data.category} ${entry.data.tags.join(' ')}`.toLowerCase()}
+              data-tags={entry.data.tags.join(',')}
+            >
+              <div class="meta-line">
+                <span>{formatDate(entry.data.pubDate)}</span>
+                <span>/</span>
+                <span>{entry.data.category}</span>
+                {entry.data.difficulty && <span class="difficulty">{entry.data.difficulty}</span>}
+                {entry.data.target && <span>{entry.data.target}</span>}
+              </div>
+              <h3>{entry.data.title}</h3>
+              <p>{entry.data.description}</p>
+              <div class="tag-list">
+                {entry.data.tags.map((tag) => <span class="tag">{tag}</span>)}
+              </div>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const search = document.querySelector<HTMLInputElement>('[data-search]');
+    const cards = [...document.querySelectorAll<HTMLElement>('[data-card]')];
+    const tagButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-tag]')];
+    let activeTag = 'all';
+
+    const applyFilters = () => {
+      const term = search?.value.trim().toLowerCase() || '';
+      cards.forEach((card) => {
+        const tags = card.dataset.tags?.split(',') || [];
+        const matchesTag = activeTag === 'all' || tags.includes(activeTag);
+        const matchesSearch = !term || card.dataset.searchText?.includes(term);
+        card.hidden = !(matchesTag && matchesSearch);
+      });
+    };
+
+    search?.addEventListener('input', applyFilters);
+    tagButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        activeTag = button.dataset.tag || 'all';
+        tagButtons.forEach((item) => item.classList.toggle('active', item === button));
+        applyFilters();
+      });
+    });
+  </script>
+</BlogLayout>

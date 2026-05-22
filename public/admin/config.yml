@@ -1,0 +1,40 @@
+local_backend: true
+
+backend:
+  name: git-gateway
+  branch: main
+
+media_folder: "public/uploads"
+public_folder: "/uploads"
+
+collections:
+  - name: "writeups"
+    label: "Writeups"
+    folder: "src/content/writeups"
+    create: true
+    delete: true
+    extension: "mdx"
+    format: "frontmatter"
+    slug: "{{slug}}"
+    editor:
+      preview: true
+    fields:
+      - { label: "Title", name: "title", widget: "string" }
+      - { label: "Description", name: "description", widget: "text" }
+      - { label: "Publish Date", name: "pubDate", widget: "datetime", date_format: "YYYY-MM-DD", time_format: false }
+      - { label: "Updated Date", name: "updatedDate", widget: "datetime", date_format: "YYYY-MM-DD", time_format: false, required: false }
+      - { label: "Author", name: "author", widget: "string", default: "Morgan" }
+      - label: "Category"
+        name: "category"
+        widget: "select"
+        default: "web"
+        options: ["web", "pwn", "crypto", "reverse", "forensics", "osint", "misc", "notes"]
+      - label: "Difficulty"
+        name: "difficulty"
+        widget: "select"
+        required: false
+        options: ["easy", "medium", "hard", "insane"]
+      - { label: "Target", name: "target", widget: "string", required: false }
+      - { label: "Tags", name: "tags", widget: "list", default: ["web"] }
+      - { label: "Draft", name: "draft", widget: "boolean", default: true }
+      - { label: "Body", name: "body", widget: "markdown" }

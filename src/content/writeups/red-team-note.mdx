@@ -1,0 +1,41 @@
+---
+title: "Red Team Note: Structure for a Clean Writeup"
+description: "A compact template for documenting recon, exploit path, impact, and fixes without losing technical signal."
+pubDate: 2026-05-22
+author: "Morgan"
+tags: ["web", "methodology", "xss"]
+category: "web"
+difficulty: "medium"
+target: "Local Lab"
+draft: false
+---
+
+## Summary
+
+This sample writeup shows the content shape for the blog. Keep the first section short: target, bug class, impact, and the result.
+
+## Recon
+
+- Map the application surface.
+- Identify trust boundaries.
+- Capture request and response pairs that prove the behavior.
+
+## Exploit Path
+
+```http
+POST /api/profile HTTP/1.1
+Host: lab.local
+Content-Type: application/json
+
+{"displayName":"<script>alert(document.domain)</script>"}
+```
+
+The important part is the reasoning chain. Include only the payloads, logs, and screenshots that move the proof forward.
+
+## Impact
+
+Explain what an attacker can do with the bug. Tie the impact to data access, account actions, privilege changes, or business logic abuse.
+
+## Fix
+
+Validate input at the boundary, encode output at render time, and add regression tests for the vulnerable sink.
