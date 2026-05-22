@@ -2,8 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getSql } from './db';
 import { getAdminEmail, isProduction } from './env';
 
-const sessionCookie = 'mw_session';
-const oauthStateCookie = 'mw_oauth_state';
+const sessionCookie = 'lat_session';
+const oauthStateCookie = 'lat_oauth_state';
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 
 interface CookieJar {
@@ -98,11 +98,14 @@ export async function requireAdmin(cookies: CookieJar) {
 }
 
 export function assertSameOrigin(request: Request) {
-  const origin = request.headers.get('origin');
-  if (!origin) return;
-
   const expected = new URL(request.url).origin;
-  if (origin !== expected) {
+  const source = request.headers.get('origin') || request.headers.get('referer');
+
+  if (!source) {
+    throw new Error('Missing request origin');
+  }
+
+  if (new URL(source).origin !== expected) {
     throw new Error('Invalid request origin');
   }
 }

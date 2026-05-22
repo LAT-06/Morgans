@@ -11,6 +11,10 @@ export interface Heading {
   slug: string;
 }
 
+export const MAX_MARKDOWN_LENGTH = 2_000_000;
+const MAX_DATA_IMAGE_URL_LENGTH = 1_500_000;
+const safeDataImagePattern = /^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i;
+
 export function slugify(value: string) {
   return String(value || '')
     .normalize('NFKD')
@@ -41,7 +45,7 @@ export function deriveMarkdown(rawMarkdown: string, existingSlug = ''): DerivedM
     throw new Error('Markdown is empty');
   }
 
-  if (markdown.length > 250000) {
+  if (markdown.length > MAX_MARKDOWN_LENGTH) {
     throw new Error('Markdown is too large');
   }
 
@@ -85,7 +89,7 @@ function escapeHtml(value: string) {
 function safeUrl(value: string) {
   const url = value.trim();
 
-  if (url.startsWith('/')) return url;
+  if (url.startsWith('/') && !url.startsWith('//')) return url;
 
   try {
     const parsed = new URL(url);
@@ -93,6 +97,19 @@ function safeUrl(value: string) {
   } catch {
     return '';
   }
+}
+
+function safeImageUrl(value: string) {
+  const url = value.trim();
+
+  if (
+    url.length <= MAX_DATA_IMAGE_URL_LENGTH &&
+    safeDataImagePattern.test(url)
+  ) {
+    return url.replace(/\s/g, '');
+  }
+
+  return safeUrl(url);
 }
 
 function renderInline(text: string) {
@@ -167,7 +184,7 @@ export function renderMarkdown(markdown: string) {
 
     const image = trimmed.match(/^!\[([^\]]*)]\(([^)]+)\)$/);
     if (image) {
-      const src = safeUrl(image[2]);
+      const src = safeImageUrl(image[2]);
       if (src) {
         const alt = escapeHtml(image[1]);
         const caption = image[1] ? `<figcaption>${alt}</figcaption>` : '';

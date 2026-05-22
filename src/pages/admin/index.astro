@@ -769,6 +769,10 @@ Describe the fix.`;
           let saveTimer = 0;
           let isSaving = false;
           let queuedSave = null;
+          const maxMarkdownLength = 1_900_000;
+          const maxClipboardImageBytes = 8 * 1024 * 1024;
+          const maxPastedImageSide = 1600;
+          const clipboardImageTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
           const markdown = document.querySelector('[data-markdown]');
           const preview = document.querySelector('[data-preview]');
@@ -812,7 +816,7 @@ Describe the fix.`;
 
           const safeUrl = (value) => {
             const url = value.trim();
-            if (url.startsWith('/')) return url;
+            if (url.startsWith('/') && !url.startsWith('//')) return url;
             try {
               const parsed = new URL(url);
               return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
@@ -820,6 +824,8 @@ Describe the fix.`;
               return '';
             }
           };
+
+          const safeImageUrl = (value) => safeUrl(value);
 
           const appendInline = (parent, text) => {
             const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
@@ -912,7 +918,7 @@ Describe the fix.`;
 
               const image = trimmed.match(/^!\[([^\]]*)]\(([^)]+)\)$/);
               if (image) {
-                const src = safeUrl(image[2]);
+                const src = safeImageUrl(image[2]);
                 if (src) {
                   const figure = document.createElement('figure');
                   const img = document.createElement('img');
@@ -1069,6 +1075,13 @@ Describe the fix.`;
               hasUnsavedChanges = false;
               setSaveState('Nothing to save');
               setStatus('Markdown is empty.', 'error');
+              return null;
+            }
+
+            if (source.length > maxMarkdownLength) {
+              hasUnsavedChanges = true;
+              setSaveState('Too large');
+              setStatus('Markdown is too large. Remove or host large images before saving.', 'error');
               return null;
             }
 
@@ -1235,6 +1248,11 @@ Describe the fix.`;
           };
 
           const insertAtCursor = (text) => {
+            if (markdown.value.length + text.length > maxMarkdownLength) {
+              setStatus('This content is too large. Host the image and insert its URL instead.', 'error');
+              return false;
+            }
+
             const start = markdown.selectionStart ?? markdown.value.length;
             const end = markdown.selectionEnd ?? markdown.value.length;
             markdown.value = `${markdown.value.slice(0, start)}${text}${markdown.value.slice(end)}`;
@@ -1242,6 +1260,114 @@ Describe the fix.`;
             markdown.focus();
             markdown.setSelectionRange(nextCursor, nextCursor);
             markdown.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
+          };
+
+          const loadImage = (file) =>
+            new Promise((resolve, reject) => {
+              const url = URL.createObjectURL(file);
+              const image = new Image();
+              image.addEventListener('load', () => {
+                URL.revokeObjectURL(url);
+                resolve(image);
+              });
+              image.addEventListener('error', () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Cannot decode pasted image.'));
+              });
+              image.src = url;
+            });
+
+          const canvasToBlob = (canvas, type, quality) =>
+            new Promise((resolve) => {
+              canvas.toBlob((blob) => resolve(blob), type, quality);
+            });
+
+          const normalizeAltText = (file) => {
+            const baseName = String(file.name || '')
+              .replace(/\.[^.]+$/, '')
+              .replace(/[^a-z0-9_-]+/gi, '-')
+              .replace(/^-+|-+$/g, '')
+              .slice(0, 80);
+
+            return baseName || `pasted-image-${Date.now()}`;
+          };
+
+          const compressImage = async (file) => {
+            if (!clipboardImageTypes.includes(file.type)) {
+              throw new Error('Only PNG, JPEG, WebP, and GIF images can be pasted.');
+            }
+
+            if (file.size > maxClipboardImageBytes) {
+              throw new Error('Pasted image is too large (max 8MB).');
+            }
+
+            // GIFs: skip compression to preserve animation
+            if (file.type === 'image/gif') return file;
+
+            const image = await loadImage(file);
+            const scale = Math.min(
+              1,
+              maxPastedImageSide / Math.max(image.naturalWidth || 1, image.naturalHeight || 1),
+            );
+
+            // If image is already small enough, no need to compress
+            if (scale >= 1 && file.size <= 500_000) return file;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round((image.naturalWidth || 1) * scale));
+            canvas.height = Math.max(1, Math.round((image.naturalHeight || 1) * scale));
+
+            const context = canvas.getContext('2d');
+            if (!context) return file;
+
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            const compressedBlob = await canvasToBlob(canvas, 'image/webp', 0.82);
+
+            // Use compressed version if smaller, otherwise use original
+            if (compressedBlob && compressedBlob.size < file.size) {
+              return new File([compressedBlob], file.name?.replace(/\.[^.]+$/, '.webp') || 'image.webp', {
+                type: 'image/webp',
+              });
+            }
+
+            return file;
+          };
+
+          const uploadImage = async (file) => {
+            const compressed = await compressImage(file);
+            const formData = new FormData();
+            formData.append('image', compressed);
+
+            const response = await fetch('/api/posts/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+              throw new Error(result.error || 'Upload failed.');
+            }
+
+            return result.url;
+          };
+
+          const pasteImages = async (files) => {
+            setSaveState('Uploading image...');
+
+            for (const file of files) {
+              try {
+                const url = await uploadImage(file);
+                const inserted = insertAtCursor(`\n![${normalizeAltText(file)}](${url})\n`);
+                if (inserted) {
+                  setStatus('Image uploaded and inserted.', 'ok');
+                }
+              } catch (error) {
+                setSaveState(hasUnsavedChanges ? 'Unsaved changes' : 'Autosave ready');
+                setStatus(error instanceof Error ? error.message : 'Cannot paste image.', 'error');
+              }
+            }
           };
 
           const insertImage = () => {
@@ -1316,6 +1442,18 @@ Describe the fix.`;
             renderPreview();
             updateArticleChrome();
             scheduleAutosave();
+          });
+
+          markdown.addEventListener('paste', (event) => {
+            const files = Array.from(event.clipboardData?.items || [])
+              .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+              .map((item) => item.getAsFile())
+              .filter(Boolean);
+
+            if (!files.length) return;
+
+            event.preventDefault();
+            pasteImages(files);
           });
 
           document.addEventListener('click', (event) => {

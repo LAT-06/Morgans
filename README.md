@@ -64,6 +64,7 @@ Open `/admin` and sign in with Google. Only `ADMIN_EMAIL` can access the dashboa
 - Content autosaves after edits.
 - The `Draft` / `Published` control stores a private draft or makes the writeup visible on `/` and `/writeups/<slug>/`.
 - The `...` menu contains image URL insertion, public URL copy, and delete.
+- Pasted screenshots are compressed in the browser and embedded in markdown as safe image data URLs.
 
 Images should be inserted as URLs for now:
 
@@ -71,7 +72,7 @@ Images should be inserted as URLs for now:
 ![alt text](https://example.com/image.png)
 ```
 
-For production image upload, add object storage such as Vercel Blob, Cloudflare R2, Supabase Storage, or S3. Do not store image binaries in Neon.
+For larger production image libraries, add object storage such as Vercel Blob, Cloudflare R2, Supabase Storage, or S3. Do not store large image binaries in Neon.
 
 ## Deploy
 

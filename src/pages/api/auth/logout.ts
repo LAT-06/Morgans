@@ -19,7 +19,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   return redirect('/admin');
 };
 
-export const GET: APIRoute = async ({ cookies }) => {
-  await destroySession(cookies);
+export const GET: APIRoute = async () => {
   return redirect('/admin');
 };

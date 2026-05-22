@@ -7,8 +7,8 @@ let setupError = '';
 
 try {
   writeups = await listPublishedPosts();
-} catch (error) {
-  setupError = error instanceof Error ? error.message : 'Cannot load posts.';
+} catch {
+  setupError = 'Cannot load posts.';
 }
 
 const tags = ['writeup'];

@@ -9,8 +9,8 @@ let loadError = '';
 
 try {
   entry = await getPublishedPostBySlug(slug);
-} catch (error) {
-  loadError = error instanceof Error ? error.message : 'Cannot load post.';
+} catch {
+  loadError = 'Cannot load post.';
 }
 
 if (!entry) {
