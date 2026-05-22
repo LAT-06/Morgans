@@ -1,61 +1,75 @@
 ---
-import { getCollection, render } from 'astro:content';
 import BlogLayout from '../../layouts/BlogLayout.astro';
+import { getMarkdownHeadings, renderMarkdown } from '../../lib/markdown';
+import { getPublishedPostBySlug } from '../../lib/posts';
 
-export async function getStaticPaths() {
-  const writeups = await getCollection('writeups', ({ data }) => !data.draft);
+const slug = String(Astro.params.slug || '');
+let entry = null;
+let loadError = '';
 
-  return writeups.map((entry) => ({
-    params: { slug: entry.id },
-    props: { entry },
-  }));
+try {
+  entry = await getPublishedPostBySlug(slug);
+} catch (error) {
+  loadError = error instanceof Error ? error.message : 'Cannot load post.';
 }
 
-const { entry } = Astro.props;
-const { Content, headings } = await render(entry);
+if (!entry) {
+  Astro.response.status = 404;
+}
 
-const formatDate = (date: Date) =>
-  new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
-  }).format(date);
+const headings = entry ? getMarkdownHeadings(entry.content) : [];
+const contentHtml = entry ? renderMarkdown(entry.content) : '';
+
+const formatDate = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat('en', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+      }).format(new Date(value))
+    : 'Draft';
 ---
 
-<BlogLayout title={entry.data.title} description={entry.data.description}>
+<BlogLayout
+  title={entry?.title ?? 'Writeup not found'}
+  description={entry?.description ?? 'Writeup not found.'}
+>
   <article class="page-shell">
-    <header class="article-hero">
-      <p class="eyebrow">{entry.data.category} / writeup</p>
-      <h1>{entry.data.title}</h1>
-      <p>{entry.data.description}</p>
-      <div class="tag-list">
-        <span class="tag">{formatDate(entry.data.pubDate)}</span>
-        {entry.data.updatedDate && <span class="tag">Updated {formatDate(entry.data.updatedDate)}</span>}
-        {entry.data.difficulty && <span class="tag difficulty">{entry.data.difficulty}</span>}
-        {entry.data.target && <span class="tag">{entry.data.target}</span>}
-        {entry.data.tags.map((tag) => <span class="tag">{tag}</span>)}
-      </div>
-    </header>
+    {
+      entry ? (
+        <>
+          <header class="article-hero">
+            <p class="eyebrow">notes / writeup</p>
+            <h1>{entry.title}</h1>
+            <p>{entry.description}</p>
+            <div class="tag-list">
+              <span class="tag">{formatDate(entry.publishedAt)}</span>
+              <span class="tag">writeup</span>
+            </div>
+          </header>
 
-    <div class="article-layout">
-      <div class="article-shell">
-        <div class="prose">
-          <Content />
-        </div>
-      </div>
+          <div class="article-layout">
+            <div class="article-shell">
+              <div class="prose" set:html={contentHtml} />
+            </div>
 
-      <aside class="toc" aria-label="Table of contents">
-        <h2>On this page</h2>
-        {
-          headings.length > 0 ? (
-            headings
-              .filter((heading) => heading.depth === 2 || heading.depth === 3)
-              .map((heading) => <a href={`#${heading.slug}`}>{heading.text}</a>)
-          ) : (
-            <span class="meta-line">No headings</span>
-          )
-        }
-      </aside>
-    </div>
+            <aside class="toc" aria-label="Table of contents">
+              <h2>On this page</h2>
+              {headings.length > 0 ? (
+                headings.map((heading) => <a href={`#${heading.slug}`}>{heading.text}</a>)
+              ) : (
+                <span class="meta-line">No headings</span>
+              )}
+            </aside>
+          </div>
+        </>
+      ) : (
+        <header class="article-hero">
+          <p class="eyebrow">404 / writeup</p>
+          <h1>Writeup not found</h1>
+          <p>{loadError || 'This post does not exist or is not published.'}</p>
+        </header>
+      )
+    }
   </article>
 </BlogLayout>

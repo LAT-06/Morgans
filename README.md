@@ -1,8 +1,8 @@
-# Morgan Writeups
+# LAT
 
-Astro blog for security writeups with a dark red hacker theme and a light minimal luxury theme.
+Astro SSR blog for security writeups with Google-only admin login and Neon Postgres storage.
 
-## Run locally
+## Run Locally
 
 ```sh
 pnpm install
@@ -11,69 +11,84 @@ pnpm dev
 
 Open `http://localhost:4321`.
 
-## Writeups
+## Environment
 
-Writeups live in `src/content/writeups/*.mdx`.
+Create `.env` locally and set the same values in Vercel:
 
-Required frontmatter:
+```sh
+DATABASE_URL="postgresql://..."
+ADMIN_EMAIL="you@gmail.com"
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+SITE_URL="https://blog.yourdomain.com"
+```
+
+Never commit `.env`. `DATABASE_URL`, `GOOGLE_CLIENT_SECRET`, and any OAuth secrets must stay in local/Vercel environment variables only.
+
+Optional if Google needs an exact callback override:
+
+```sh
+GOOGLE_REDIRECT_URI="https://blog.yourdomain.com/api/auth/google/callback"
+```
+
+Google OAuth callback URL:
+
+```txt
+http://localhost:4321/api/auth/google/callback
+https://blog.yourdomain.com/api/auth/google/callback
+```
+
+## Database
+
+Run the schema on Neon:
+
+```sh
+pnpm run db:migrate
+```
+
+Import existing MDX writeups into Neon:
+
+```sh
+pnpm run db:seed
+```
+
+## Admin
+
+Open `/admin` and sign in with Google. Only `ADMIN_EMAIL` can access the dashboard.
+
+- The top `Posts` menu loads existing posts and supports search.
+- `New` starts a new draft.
+- The first `# Heading` becomes the title.
+- The first normal text line becomes the description.
+- The right pane previews markdown live.
+- Content autosaves after edits.
+- The `Draft` / `Published` control stores a private draft or makes the writeup visible on `/` and `/writeups/<slug>/`.
+- The `...` menu contains image URL insertion, public URL copy, and delete.
+
+Images should be inserted as URLs for now:
 
 ```md
----
-title: "Title"
-description: "Short summary"
-pubDate: 2026-05-22
-tags: ["web"]
-category: "web"
-draft: false
----
+![alt text](https://example.com/image.png)
 ```
 
-## Web CMS
+For production image upload, add object storage such as Vercel Blob, Cloudflare R2, Supabase Storage, or S3. Do not store image binaries in Neon.
 
-`/admin/` uses Decap CMS and writes MDX files into `src/content/writeups`.
+## Deploy
 
-Local CMS needs two terminals:
+This project uses Astro SSR with the Vercel adapter.
 
-```sh
-pnpm dev
-```
-
-```sh
-pnpm run cms:local
-```
-
-Then open `http://localhost:4321/admin/`. The local proxy listens on `http://localhost:8081/api/v1`; if it is not running, the browser will show `ERR_CONNECTION_REFUSED`.
-
-For Netlify:
-
-1. Deploy this repo.
-2. Enable Identity.
-3. Enable Git Gateway.
-4. Invite your admin account.
-5. Go to `https://blog.yourdomain.com/admin/`.
-
-Decap's local proxy does not support `editorial_workflow`. If you want editorial workflow in production, add this back to `public/admin/config.yml` after the site is connected to Git Gateway:
-
-```yml
-publish_mode: editorial_workflow
-```
-
-For GitHub OAuth on another host, edit `public/admin/config.yml` and replace the backend with your GitHub repo:
-
-```yml
-backend:
-  name: github
-  repo: your-user/your-repo
-  branch: main
-```
+1. Create a Neon database.
+2. Set the environment variables in Vercel.
+3. Configure Google OAuth callback URLs.
+4. Deploy to Vercel.
+5. Run `pnpm run db:migrate` locally with the production `DATABASE_URL`, or run the SQL in `db/schema.sql` from Neon.
 
 ## Subdomain
 
 Point `blog.yourdomain.com` to the host:
 
-- Netlify: add a `CNAME` record from `blog` to the Netlify domain.
 - Vercel: add the domain in Vercel, then create the DNS record it gives you.
-- Set `SITE_URL=https://blog.yourdomain.com` in the hosting environment.
+- Set `SITE_URL=https://blog.yourdomain.com`.
 
 ## Build
 

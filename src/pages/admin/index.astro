@@ -1,62 +1,1345 @@
 ---
+import { getAdminSession } from '../../lib/auth';
+import { getAdminEmail, getEnv } from '../../lib/env';
+import { isDbConfigured, listAdminPosts } from '../../lib/posts';
+
+let session = null;
+let posts = [];
+let setupError = '';
+const loginError = Astro.url.searchParams.get('error') || '';
+const isForbidden = loginError === 'forbidden';
+
+try {
+  if (!isDbConfigured()) {
+    setupError = 'DATABASE_URL is not configured.';
+  } else if (!getAdminEmail()) {
+    setupError = 'ADMIN_EMAIL is not configured.';
+  } else if (isForbidden) {
+    session = null;
+  } else {
+    session = await getAdminSession(Astro.cookies);
+    posts = session ? await listAdminPosts() : [];
+  }
+} catch (error) {
+  setupError = error instanceof Error ? error.message : 'Admin setup failed.';
+}
+
+const googleReady = Boolean(getEnv('GOOGLE_CLIENT_ID') && getEnv('GOOGLE_CLIENT_SECRET'));
+const postsJson = JSON.stringify(posts).replace(/</g, '\\u003c');
 ---
 
 <!doctype html>
-<html lang="vi">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Morgan Writeups CMS</title>
+    <title>LAT Admin</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
       :root {
         color-scheme: dark;
+        --bg: #08090d;
+        --panel: #111218;
+        --panel-strong: #0d0f14;
+        --text: #f4f1ed;
+        --muted: #a6a0a0;
+        --line: rgba(255, 255, 255, 0.12);
+        --accent: #ff3048;
+        --green: #37d399;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
           sans-serif;
-        background: #08090d;
-        color: #f4f1ed;
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
-        margin: 0;
         min-height: 100vh;
+        margin: 0;
         background:
           linear-gradient(90deg, rgba(255, 48, 72, 0.08) 1px, transparent 1px),
           linear-gradient(0deg, rgba(255, 48, 72, 0.055) 1px, transparent 1px),
-          #08090d;
+          var(--bg);
         background-size: 56px 56px;
+        color: var(--text);
       }
 
-      .cms-loading {
-        display: grid;
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1480px, calc(100% - 32px));
         min-height: 100vh;
-        place-items: center;
-        padding: 24px;
+        margin: 0 auto;
+        padding: 18px 0 28px;
       }
 
-      .cms-loading strong {
-        display: block;
-        color: #ff3048;
+      .topbar,
+      .actions,
+      .brand,
+      .article-controls {
+        display: flex;
+        align-items: center;
+      }
+
+      .topbar {
+        position: relative;
+        z-index: 5;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .brand {
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--accent);
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.1;
+      }
+
+      .brand small,
+      .muted {
+        color: var(--muted);
+      }
+
+      .brand small {
+        display: block;
+        font-size: 13px;
+      }
+
+      .actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .actions form {
+        margin: 0;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 40px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .button.danger {
+        border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+        color: #ffb2bc;
+      }
+
+      .button:hover,
+      .button:focus-visible {
+        border-color: var(--accent);
+        outline: none;
+      }
+
+      .button[disabled],
+      .button.disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
+
+      .post-picker,
+      .more-wrapper {
+        position: relative;
+      }
+
+      .post-menu,
+      .more-panel {
+        position: absolute;
+        z-index: 20;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--panel) 98%, #000);
+        box-shadow: var(--shadow);
+      }
+
+      .post-menu[hidden],
+      .more-panel[hidden] {
+        display: none;
+      }
+
+      .post-menu {
+        top: calc(100% + 8px);
+        right: 0;
+        width: min(440px, calc(100vw - 32px));
+        padding: 10px;
+      }
+
+      .post-search {
+        width: 100%;
+        min-height: 40px;
+        margin-bottom: 10px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-strong);
+        color: var(--text);
+      }
+
+      .post-search:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+
+      .post-menu-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .post-list {
+        display: grid;
+        align-content: start;
+        gap: 8px;
+        max-height: min(58vh, 520px);
+        overflow: auto;
+      }
+
+      .post-menu-item {
+        display: grid;
+        gap: 5px;
+        width: 100%;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-strong);
+        color: var(--text);
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .post-menu-item:hover,
+      .post-menu-item:focus-visible,
+      .post-menu-item.active {
+        border-color: var(--accent);
+        outline: none;
+      }
+
+      .post-menu-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .post-menu-title strong,
+      .post-menu-item span {
+        overflow-wrap: anywhere;
+      }
+
+      .post-menu-title strong {
+        min-width: 0;
         font-size: 14px;
+        line-height: 1.25;
+      }
+
+      .post-menu-item span {
+        color: var(--muted);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+      }
+
+      .status-pill {
+        flex: 0 0 auto;
+        padding: 3px 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
         letter-spacing: 0;
         text-transform: uppercase;
       }
 
-      .cms-loading span {
-        color: #a6a0a0;
+      .status-pill.published {
+        border-color: color-mix(in srgb, var(--green) 70%, var(--line));
+        color: var(--green);
+      }
+
+      .status {
+        margin-bottom: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--panel) 92%, transparent);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status.ok {
+        border-color: color-mix(in srgb, var(--green) 55%, var(--line));
+        color: var(--green);
+      }
+
+      .status.error {
+        border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+        color: var(--accent);
+      }
+
+      .login-panel,
+      .editor,
+      .preview {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--panel) 92%, transparent);
+        box-shadow: var(--shadow);
+      }
+
+      .login-panel {
+        max-width: 620px;
+        margin: 80px auto 0;
+        padding: 24px;
+      }
+
+      .login-panel h2 {
+        margin: 0 0 12px;
+        font-size: 30px;
+      }
+
+      .login-panel p {
+        color: var(--muted);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 0.86fr);
+        gap: 16px;
+      }
+
+      .editor,
+      .preview {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
+      }
+
+      .article-bar,
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .article-bar {
+        min-height: 64px;
+        padding: 10px 12px;
+      }
+
+      .article-meta {
+        display: grid;
+        min-width: 0;
+        gap: 3px;
+      }
+
+      .article-meta strong {
+        overflow: hidden;
+        font-size: 15px;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .article-meta span {
+        overflow: hidden;
+        color: var(--muted);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .article-controls {
+        flex: 0 0 auto;
+        gap: 10px;
+      }
+
+      .save-state {
+        color: var(--muted);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .status-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-width: 186px;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-strong);
+      }
+
+      .status-tab {
+        min-height: 34px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .status-tab:hover,
+      .status-tab:focus-visible,
+      .status-tab.active {
+        color: var(--text);
+        outline: none;
+      }
+
+      .status-tab.active {
+        background: rgba(255, 48, 72, 0.18);
+      }
+
+      .status-tab.published.active {
+        background: rgba(55, 211, 153, 0.13);
+        color: var(--green);
+      }
+
+      .more-button {
+        width: 40px;
+        min-width: 40px;
+        padding: 0;
+        font-size: 18px;
+      }
+
+      .more-panel {
+        top: calc(100% + 8px);
+        right: 0;
+        display: grid;
+        width: 220px;
+        padding: 8px;
+        gap: 6px;
+      }
+
+      .more-panel .button {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .panel-header {
+        padding: 12px;
+        color: var(--muted);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .editor textarea {
+        width: 100%;
+        min-height: calc(100vh - 206px);
+        padding: 18px;
+        border: 0;
+        border-radius: 0;
+        background: var(--panel-strong);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 15px;
+        line-height: 1.7;
+        resize: vertical;
+      }
+
+      .editor textarea:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+        outline-offset: -2px;
+      }
+
+      .preview-body {
+        overflow: auto;
+        min-height: calc(100vh - 239px);
+        padding: 22px;
+      }
+
+      .preview-title {
+        margin: 0 0 10px;
+        font-size: 34px;
+        line-height: 1.08;
+      }
+
+      .preview-description,
+      .preview-body p,
+      .preview-body li {
+        color: color-mix(in srgb, var(--text) 82%, var(--muted));
+        line-height: 1.75;
+      }
+
+      .preview-body h2,
+      .preview-body h3,
+      .preview-body h4 {
+        margin: 28px 0 10px;
+        line-height: 1.15;
+      }
+
+      .preview-body h2 {
+        font-size: 26px;
+      }
+
+      .preview-body h3 {
+        font-size: 21px;
+      }
+
+      .preview-body a {
+        color: var(--accent);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      .preview-body code {
+        border-radius: 5px;
+        background: rgba(255, 48, 72, 0.12);
+        color: var(--accent);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      .preview-body pre {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #08090d;
+      }
+
+      .preview-body pre code {
+        background: transparent;
+        color: #f4f1ed;
+      }
+
+      .preview-body blockquote {
+        padding: 12px 16px;
+        border-left: 3px solid var(--accent);
+        background: rgba(255, 48, 72, 0.1);
+      }
+
+      .preview-body img {
+        display: block;
+        max-width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .preview-separator {
+        height: 1px;
+        margin: 22px 0;
+        background: var(--line);
+      }
+
+      @media (max-width: 1040px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .topbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .actions,
+        .button,
+        .actions form,
+        .actions form button,
+        .post-picker,
+        .post-picker > .button {
+          width: 100%;
+        }
+
+        .post-menu {
+          left: 0;
+          right: auto;
+          width: 100%;
+        }
+
+        .article-bar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .article-controls {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .status-tabs {
+          width: 100%;
+          min-width: 0;
+        }
+
+        .more-panel {
+          left: 0;
+          right: auto;
+          width: 100%;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="cms-loading">
-      <div>
-        <strong>Morgan Writeups CMS</strong>
-        <span>Loading editor...</span>
-      </div>
-    </div>
-    <script is:inline src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <span class="brand-mark">LAT</span>
+          <span>
+            <h1>LAT Admin</h1>
+            <small>Google OAuth + Neon dashboard</small>
+          </span>
+        </a>
+        <div class="actions">
+          {
+            session && (
+              <>
+                <div class="post-picker">
+                  <button class="button" type="button" data-post-menu-toggle aria-expanded="false">
+                    <span data-post-menu-label>Posts</span>
+                  </button>
+                  <div class="post-menu" data-post-menu hidden>
+                    <input class="post-search" type="search" placeholder="Search posts..." data-post-search />
+                    <div class="post-menu-meta">
+                      <span>Posts</span>
+                      <span data-post-count>0 total</span>
+                    </div>
+                    <div class="post-list" data-posts></div>
+                  </div>
+                </div>
+                <button class="button primary" type="button" data-new>New</button>
+              </>
+            )
+          }
+          <a class="button" href="/">Home</a>
+          {session && <form method="post" action="/api/auth/logout"><button class="button" type="submit">Logout</button></form>}
+        </div>
+      </header>
+
+      {setupError && <div class="status error">{setupError}</div>}
+      {loginError && <div class="status error">Login error: {loginError}</div>}
+
+      {
+        isForbidden ? (
+          <section class="login-panel">
+            <h2>Forbidden</h2>
+            <p>This Google account is not allowed to access the dashboard. Only the email in <code>ADMIN_EMAIL</code> can edit or publish posts.</p>
+            <div class="actions">
+              <a class="button" href="/">Back home</a>
+              <a class="button primary" href="/api/auth/google">Login with allowed email</a>
+            </div>
+          </section>
+        ) : !session ? (
+          <section class="login-panel">
+            <h2>Admin login</h2>
+            <p>Sign in with Google. Only the email in <code>ADMIN_EMAIL</code> can access the dashboard.</p>
+            <div class="actions">
+              <a class={`button primary ${!googleReady || setupError ? 'disabled' : ''}`} href="/api/auth/google">
+                Continue with Google
+              </a>
+            </div>
+            {!googleReady && <p class="muted">GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing.</p>}
+          </section>
+        ) : (
+          <>
+            <div class="status ok" data-status>Signed in as {session.email}</div>
+            <div class="workspace">
+              <section class="editor" aria-label="Markdown editor">
+                <div class="article-bar">
+                  <div class="article-meta">
+                    <strong data-article-title>Untitled draft</strong>
+                    <span data-article-meta>Not saved yet</span>
+                  </div>
+                  <div class="article-controls">
+                    <span class="save-state" data-save-state>Autosave ready</span>
+                    <div class="status-tabs" role="group" aria-label="Post status">
+                      <button class="status-tab" type="button" data-status-choice="draft">Draft</button>
+                      <button class="status-tab published" type="button" data-status-choice="published">Published</button>
+                    </div>
+                    <div class="more-wrapper">
+                      <button class="button more-button" type="button" data-more-toggle aria-label="Post actions" aria-expanded="false">...</button>
+                      <div class="more-panel" data-more-menu hidden>
+                        <button class="button" type="button" data-image>Insert image URL</button>
+                        <button class="button" type="button" data-copy-url>Copy public URL</button>
+                        <button class="button danger" type="button" data-delete>Delete post</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <textarea data-markdown spellcheck="false"></textarea>
+              </section>
+
+              <aside class="preview" aria-label="Markdown preview">
+                <div class="panel-header">
+                  <span>Preview</span>
+                  <span>Live</span>
+                </div>
+                <article class="preview-body" data-preview></article>
+              </aside>
+            </div>
+            <script id="initial-posts" type="application/json" set:html={postsJson}></script>
+          </>
+        )
+      }
+    </main>
+
+    {
+      session && (
+        <script>
+          const defaultMarkdown = `# New writeup
+
+Write a short description here.
+
+## Summary
+
+Writeup content.
+
+## Exploit
+
+\`\`\`http
+GET / HTTP/1.1
+Host: target.local
+\`\`\`
+
+## Impact
+
+Describe the impact.
+
+## Fix
+
+Describe the fix.`;
+
+          let posts = JSON.parse(document.getElementById('initial-posts')?.textContent || '[]');
+          let currentPost = null;
+          let currentStatus = 'draft';
+          let hasUnsavedChanges = false;
+          let saveTimer = 0;
+          let isSaving = false;
+          let queuedSave = null;
+
+          const markdown = document.querySelector('[data-markdown]');
+          const preview = document.querySelector('[data-preview]');
+          const postList = document.querySelector('[data-posts]');
+          const postMenu = document.querySelector('[data-post-menu]');
+          const postMenuToggle = document.querySelector('[data-post-menu-toggle]');
+          const postMenuLabel = document.querySelector('[data-post-menu-label]');
+          const postSearch = document.querySelector('[data-post-search]');
+          const postCount = document.querySelector('[data-post-count]');
+          const statusBox = document.querySelector('[data-status]');
+          const articleTitle = document.querySelector('[data-article-title]');
+          const articleMeta = document.querySelector('[data-article-meta]');
+          const saveState = document.querySelector('[data-save-state]');
+          const moreMenu = document.querySelector('[data-more-menu]');
+          const moreToggle = document.querySelector('[data-more-toggle]');
+          const deleteButton = document.querySelector('[data-delete]');
+          const copyUrlButton = document.querySelector('[data-copy-url]');
+          const statusChoices = Array.from(document.querySelectorAll('[data-status-choice]'));
+
+          const setStatus = (message, type = 'ok') => {
+            statusBox.textContent = message;
+            statusBox.className = `status ${type}`.trim();
+          };
+
+          const setSaveState = (message) => {
+            saveState.textContent = message;
+          };
+
+          const stripMarkdown = (value) =>
+            value
+              .replace(/!\[[^\]]*]\([^)]+\)/g, '')
+              .replace(/\[[^\]]+]\([^)]+\)/g, '$1')
+              .replace(/[`*_>#-]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+
+          const titleFromMarkdown = (value) => {
+            const titleMatch = value.match(/^#\s+(.+)$/m);
+            return stripMarkdown(titleMatch?.[1] || '') || 'Untitled writeup';
+          };
+
+          const safeUrl = (value) => {
+            const url = value.trim();
+            if (url.startsWith('/')) return url;
+            try {
+              const parsed = new URL(url);
+              return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+            } catch {
+              return '';
+            }
+          };
+
+          const appendInline = (parent, text) => {
+            const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
+            text.split(pattern).filter(Boolean).forEach((part) => {
+              if (part.startsWith('`') && part.endsWith('`')) {
+                const code = document.createElement('code');
+                code.textContent = part.slice(1, -1);
+                parent.append(code);
+                return;
+              }
+
+              if (part.startsWith('**') && part.endsWith('**')) {
+                const strong = document.createElement('strong');
+                strong.textContent = part.slice(2, -2);
+                parent.append(strong);
+                return;
+              }
+
+              const link = part.match(/^\[([^\]]+)]\(([^)]+)\)$/);
+              if (link) {
+                const href = safeUrl(link[2]);
+                if (href) {
+                  const anchor = document.createElement('a');
+                  anchor.href = href;
+                  anchor.textContent = link[1];
+                  if (href.startsWith('http')) {
+                    anchor.rel = 'noreferrer';
+                    anchor.target = '_blank';
+                  }
+                  parent.append(anchor);
+                  return;
+                }
+              }
+
+              parent.append(document.createTextNode(part));
+            });
+          };
+
+          const renderPreview = () => {
+            const source = markdown.value.trim();
+            const titleMatch = source.match(/^#\s+(.+)$/m);
+            const title = stripMarkdown(titleMatch?.[1] || 'Untitled writeup');
+            const body = titleMatch ? source.replace(titleMatch[0], '').trim() : source;
+            const lines = body.split('\n');
+            let index = 0;
+
+            preview.replaceChildren();
+            const titleNode = document.createElement('h1');
+            titleNode.className = 'preview-title';
+            titleNode.textContent = title;
+            preview.append(titleNode);
+
+            const description =
+              lines
+                .map((line) => line.trim())
+                .find((line) => line && !line.startsWith('#') && !line.startsWith('```') && !line.startsWith('![')) || '';
+            if (description) {
+              const descriptionNode = document.createElement('p');
+              descriptionNode.className = 'preview-description';
+              descriptionNode.textContent = stripMarkdown(description);
+              preview.append(descriptionNode);
+            }
+
+            const separator = document.createElement('div');
+            separator.className = 'preview-separator';
+            preview.append(separator);
+
+            while (index < lines.length) {
+              const trimmed = lines[index].trim();
+              if (!trimmed) {
+                index += 1;
+                continue;
+              }
+
+              if (trimmed.startsWith('```')) {
+                const codeLines = [];
+                index += 1;
+                while (index < lines.length && !lines[index].trim().startsWith('```')) {
+                  codeLines.push(lines[index]);
+                  index += 1;
+                }
+                index += 1;
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                code.textContent = codeLines.join('\n');
+                pre.append(code);
+                preview.append(pre);
+                continue;
+              }
+
+              const image = trimmed.match(/^!\[([^\]]*)]\(([^)]+)\)$/);
+              if (image) {
+                const src = safeUrl(image[2]);
+                if (src) {
+                  const figure = document.createElement('figure');
+                  const img = document.createElement('img');
+                  img.src = src;
+                  img.alt = image[1];
+                  figure.append(img);
+                  preview.append(figure);
+                }
+                index += 1;
+                continue;
+              }
+
+              const heading = trimmed.match(/^(#{2,4})\s+(.+)$/);
+              if (heading) {
+                const node = document.createElement(`h${heading[1].length}`);
+                appendInline(node, heading[2]);
+                preview.append(node);
+                index += 1;
+                continue;
+              }
+
+              if (trimmed.startsWith('- ')) {
+                const list = document.createElement('ul');
+                while (index < lines.length && lines[index].trim().startsWith('- ')) {
+                  const item = document.createElement('li');
+                  appendInline(item, lines[index].trim().slice(2));
+                  list.append(item);
+                  index += 1;
+                }
+                preview.append(list);
+                continue;
+              }
+
+              if (trimmed.startsWith('> ')) {
+                const quote = document.createElement('blockquote');
+                appendInline(quote, trimmed.slice(2));
+                preview.append(quote);
+                index += 1;
+                continue;
+              }
+
+              const paragraph = document.createElement('p');
+              appendInline(paragraph, trimmed);
+              preview.append(paragraph);
+              index += 1;
+            }
+          };
+
+          const markdownForPost = (post) => `# ${post.title}\n\n${post.content}`.trim();
+
+          const upsertPost = (post) => {
+            const index = posts.findIndex((item) => item.id === post.id);
+            if (index >= 0) {
+              posts[index] = post;
+            } else {
+              posts.unshift(post);
+            }
+            posts.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+          };
+
+          const removePost = (postId) => {
+            posts = posts.filter((post) => post.id !== postId);
+          };
+
+          const updateArticleChrome = () => {
+            articleTitle.textContent = titleFromMarkdown(markdown.value);
+            articleMeta.textContent = currentPost?.slug
+              ? `${currentPost.slug} / ${currentStatus}`
+              : `Not saved yet / ${currentStatus}`;
+            postMenuLabel.textContent = currentPost?.title || 'Posts';
+            deleteButton.disabled = !currentPost?.id;
+            copyUrlButton.disabled = !currentPost?.id || currentStatus !== 'published';
+
+            statusChoices.forEach((button) => {
+              const isActive = button.dataset.statusChoice === currentStatus;
+              button.classList.toggle('active', isActive);
+              button.setAttribute('aria-pressed', String(isActive));
+            });
+          };
+
+          const renderPosts = () => {
+            const query = postSearch.value.trim().toLowerCase();
+            const filteredPosts = posts.filter((post) =>
+              [post.title, post.slug, post.status]
+                .join(' ')
+                .toLowerCase()
+                .includes(query),
+            );
+
+            postList.replaceChildren();
+            postCount.textContent = `${posts.length} total`;
+
+            if (!filteredPosts.length) {
+              const empty = document.createElement('div');
+              empty.className = 'post-menu-item';
+              empty.textContent = query ? 'No posts match your search.' : 'No posts yet.';
+              postList.append(empty);
+              updateArticleChrome();
+              return;
+            }
+
+            filteredPosts.forEach((post) => {
+              const button = document.createElement('button');
+              button.className = `post-menu-item ${currentPost?.id === post.id ? 'active' : ''}`.trim();
+              button.type = 'button';
+
+              const titleRow = document.createElement('div');
+              titleRow.className = 'post-menu-title';
+              const title = document.createElement('strong');
+              title.textContent = post.title;
+              const pill = document.createElement('span');
+              pill.className = `status-pill ${post.status === 'published' ? 'published' : ''}`.trim();
+              pill.textContent = post.status;
+              titleRow.append(title, pill);
+
+              const meta = document.createElement('span');
+              meta.textContent = post.slug;
+              button.append(titleRow, meta);
+              button.addEventListener('click', () => selectPost(post));
+              postList.append(button);
+            });
+
+            updateArticleChrome();
+          };
+
+          const setPostMenuOpen = (open) => {
+            postMenu.hidden = !open;
+            postMenuToggle.setAttribute('aria-expanded', String(open));
+            if (open) {
+              postSearch.focus();
+              renderPosts();
+            }
+          };
+
+          const setMoreMenuOpen = (open) => {
+            moreMenu.hidden = !open;
+            moreToggle.setAttribute('aria-expanded', String(open));
+          };
+
+          const clearSaveTimer = () => {
+            if (saveTimer) {
+              window.clearTimeout(saveTimer);
+              saveTimer = 0;
+            }
+          };
+
+          const isDefaultDraft = () => !currentPost?.id && markdown.value.trim() === defaultMarkdown.trim();
+
+          const savePost = async (status = currentStatus, options = {}) => {
+            clearSaveTimer();
+            const source = markdown.value.trim();
+
+            if (!source) {
+              hasUnsavedChanges = false;
+              setSaveState('Nothing to save');
+              setStatus('Markdown is empty.', 'error');
+              return null;
+            }
+
+            if (isDefaultDraft()) {
+              setSaveState('Not saved yet');
+              if (options.reason !== 'autosave') {
+                setStatus('Change the default draft before saving.', 'error');
+              }
+              return null;
+            }
+
+            if (isSaving) {
+              queuedSave = { status, options };
+              return null;
+            }
+
+            isSaving = true;
+            currentStatus = status;
+            updateArticleChrome();
+            setSaveState(options.reason === 'autosave' ? 'Autosaving...' : 'Saving...');
+
+            let savedPost = null;
+            try {
+              const isUpdate = Boolean(currentPost?.id);
+              const response = await fetch(isUpdate ? `/api/posts/${currentPost.id}` : '/api/posts', {
+                method: isUpdate ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ markdown: source, status }),
+              });
+              const result = await response.json();
+
+              if (!response.ok) {
+                hasUnsavedChanges = true;
+                setSaveState('Save failed');
+                setStatus(result.error || 'Save failed.', 'error');
+                return null;
+              }
+
+              savedPost = result.post;
+              currentPost = result.post;
+              currentStatus = result.post.status;
+              upsertPost(result.post);
+              renderPosts();
+
+              hasUnsavedChanges = markdown.value.trim() !== source;
+              if (hasUnsavedChanges) {
+                setSaveState('Unsaved changes');
+                scheduleAutosave();
+              } else {
+                setSaveState(`Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+              }
+
+              const verb = result.post.status === 'published' ? 'Published' : 'Saved as draft';
+              setStatus(`${verb}: ${result.post.slug}`, 'ok');
+            } catch (error) {
+              hasUnsavedChanges = true;
+              setSaveState('Save failed');
+              setStatus(error instanceof Error ? error.message : 'Save failed.', 'error');
+            } finally {
+              isSaving = false;
+            }
+
+            if (queuedSave) {
+              const nextSave = queuedSave;
+              queuedSave = null;
+              return savePost(nextSave.status, nextSave.options);
+            }
+
+            return savedPost;
+          };
+
+          const scheduleAutosave = () => {
+            clearSaveTimer();
+            if (!markdown.value.trim() || isDefaultDraft()) return;
+            setSaveState('Unsaved changes');
+            saveTimer = window.setTimeout(() => {
+              savePost(currentStatus, { reason: 'autosave' });
+            }, 1200);
+          };
+
+          const changeCurrentStatus = async (status) => {
+            currentStatus = status;
+            updateArticleChrome();
+
+            if (!currentPost?.id || hasUnsavedChanges) {
+              await savePost(status, { reason: 'status' });
+              return;
+            }
+
+            if (isSaving) {
+              queuedSave = { status, options: { reason: 'status' } };
+              return;
+            }
+
+            clearSaveTimer();
+            isSaving = true;
+            setSaveState('Saving status...');
+            try {
+              const response = await fetch(`/api/posts/${currentPost.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status }),
+              });
+              const result = await response.json();
+
+              if (!response.ok) {
+                currentStatus = currentPost.status;
+                updateArticleChrome();
+                setSaveState('Status failed');
+                setStatus(result.error || 'Status update failed.', 'error');
+                return;
+              }
+
+              currentPost = result.post;
+              currentStatus = result.post.status;
+              upsertPost(result.post);
+              renderPosts();
+              setSaveState(`Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+              setStatus(`${status === 'published' ? 'Published' : 'Hidden as draft'}: ${result.post.slug}`, 'ok');
+            } catch (error) {
+              currentStatus = currentPost.status;
+              updateArticleChrome();
+              setSaveState('Status failed');
+              setStatus(error instanceof Error ? error.message : 'Status update failed.', 'error');
+            } finally {
+              isSaving = false;
+            }
+          };
+
+          const flushPendingSave = async () => {
+            if (hasUnsavedChanges || saveTimer) {
+              await savePost(currentStatus, { reason: 'switch' });
+            }
+          };
+
+          const selectPost = async (post) => {
+            await flushPendingSave();
+            currentPost = post;
+            currentStatus = post.status;
+            hasUnsavedChanges = false;
+            clearSaveTimer();
+            markdown.value = markdownForPost(post);
+            renderPosts();
+            renderPreview();
+            updateArticleChrome();
+            setSaveState('Autosave ready');
+            setStatus(`Editing ${post.slug}`, 'ok');
+            setPostMenuOpen(false);
+          };
+
+          const startNewPost = async () => {
+            await flushPendingSave();
+            currentPost = null;
+            currentStatus = 'draft';
+            hasUnsavedChanges = false;
+            clearSaveTimer();
+            markdown.value = defaultMarkdown;
+            renderPosts();
+            renderPreview();
+            updateArticleChrome();
+            setSaveState('Not saved yet');
+            setStatus('New draft.', 'ok');
+            setPostMenuOpen(false);
+          };
+
+          const insertAtCursor = (text) => {
+            const start = markdown.selectionStart ?? markdown.value.length;
+            const end = markdown.selectionEnd ?? markdown.value.length;
+            markdown.value = `${markdown.value.slice(0, start)}${text}${markdown.value.slice(end)}`;
+            const nextCursor = start + text.length;
+            markdown.focus();
+            markdown.setSelectionRange(nextCursor, nextCursor);
+            markdown.dispatchEvent(new Event('input', { bubbles: true }));
+          };
+
+          const insertImage = () => {
+            const url = prompt('Image URL');
+            if (!url) return;
+            const alt = prompt('Alt text') || 'image';
+            insertAtCursor(`\n![${alt}](${url})\n`);
+            setMoreMenuOpen(false);
+          };
+
+          const copyPublicUrl = async () => {
+            if (!currentPost?.slug || currentStatus !== 'published') {
+              setStatus('Publish the post before copying a public URL.', 'error');
+              return;
+            }
+
+            const url = new URL(`/writeups/${currentPost.slug}`, window.location.origin).href;
+            try {
+              await navigator.clipboard.writeText(url);
+              setStatus(`Copied public URL: ${url}`, 'ok');
+            } catch {
+              setStatus(url, 'ok');
+            }
+            setMoreMenuOpen(false);
+          };
+
+          const deleteCurrentPost = async () => {
+            if (!currentPost?.id) {
+              setStatus('No post selected.', 'error');
+              return;
+            }
+
+            if (!confirm(`Delete ${currentPost.title}?`)) return;
+
+            clearSaveTimer();
+            const deletedPostId = currentPost.id;
+            const response = await fetch(`/api/posts/${deletedPostId}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok) {
+              setStatus(result.error || 'Delete failed.', 'error');
+              return;
+            }
+
+            removePost(deletedPostId);
+            currentPost = null;
+            currentStatus = 'draft';
+            hasUnsavedChanges = false;
+            markdown.value = defaultMarkdown;
+            renderPosts();
+            renderPreview();
+            updateArticleChrome();
+            setSaveState('Not saved yet');
+            setStatus('Deleted post.', 'ok');
+            setMoreMenuOpen(false);
+          };
+
+          document.querySelector('[data-new]').addEventListener('click', startNewPost);
+          document.querySelector('[data-image]').addEventListener('click', insertImage);
+          document.querySelector('[data-delete]').addEventListener('click', deleteCurrentPost);
+          document.querySelector('[data-copy-url]').addEventListener('click', copyPublicUrl);
+
+          postMenuToggle.addEventListener('click', () => setPostMenuOpen(postMenu.hidden));
+          postSearch.addEventListener('input', renderPosts);
+          moreToggle.addEventListener('click', () => setMoreMenuOpen(moreMenu.hidden));
+
+          statusChoices.forEach((button) => {
+            button.addEventListener('click', () => changeCurrentStatus(button.dataset.statusChoice));
+          });
+
+          markdown.addEventListener('input', () => {
+            hasUnsavedChanges = true;
+            renderPreview();
+            updateArticleChrome();
+            scheduleAutosave();
+          });
+
+          document.addEventListener('click', (event) => {
+            if (!postMenu.contains(event.target) && !postMenuToggle.contains(event.target)) {
+              setPostMenuOpen(false);
+            }
+            if (!moreMenu.contains(event.target) && !moreToggle.contains(event.target)) {
+              setMoreMenuOpen(false);
+            }
+          });
+
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+              setPostMenuOpen(false);
+              setMoreMenuOpen(false);
+            }
+          });
+
+          markdown.value = defaultMarkdown;
+          renderPosts();
+          renderPreview();
+          updateArticleChrome();
+        </script>
+      )
+    }
   </body>
 </html>

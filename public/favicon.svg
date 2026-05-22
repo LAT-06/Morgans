@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
-  <title id="title">Morgan Writeups</title>
+  <title id="title">LAT</title>
   <rect width="128" height="128" rx="18" fill="#08090d"/>
   <rect x="12" y="12" width="104" height="104" rx="12" fill="#111218" stroke="#ff3048" stroke-width="4"/>
-  <path d="M30 88V40h12l16 25 16-25h12v48H72V63L61 80h-6L44 63v25H30Z" fill="#f4f1ed"/>
-  <path d="M92 40h12l-9 48H82l-6-25-6 25H57l-7-32h12l3 18 5-18h13l5 18 4-34Z" fill="#ff3048"/>
+  <text x="64" y="80" text-anchor="middle" fill="#f4f1ed" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="46" font-weight="900">LAT</text>
 </svg>

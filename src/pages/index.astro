@@ -1,25 +1,32 @@
 ---
-import { getCollection } from 'astro:content';
 import BlogLayout from '../layouts/BlogLayout.astro';
+import { isDbConfigured, listPublishedPosts } from '../lib/posts';
 
-const writeups = (await getCollection('writeups', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime(),
-);
+let writeups = [];
+let setupError = '';
 
-const tags = [...new Set(writeups.flatMap((entry) => entry.data.tags))].sort();
-const categories = [...new Set(writeups.map((entry) => entry.data.category))].sort();
+try {
+  writeups = await listPublishedPosts();
+} catch (error) {
+  setupError = error instanceof Error ? error.message : 'Cannot load posts.';
+}
+
+const tags = ['writeup'];
+const categories = [...new Set(writeups.map((entry) => 'notes'))];
 const latest = writeups[0];
 
-const formatDate = (date: Date) =>
-  new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric',
-  }).format(date);
+const formatDate = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat('en', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+      }).format(new Date(value))
+    : 'Draft';
 ---
 
 <BlogLayout
-  title="Morgan Writeups"
+  title="LAT"
   description="Security writeups, exploit notes, and reproducible research."
 >
   <section class="page-shell hero">
@@ -32,7 +39,6 @@ const formatDate = (date: Date) =>
       </p>
       <div class="hero-actions">
         <a class="button primary" href="#writeups">Read writeups</a>
-        <a class="button" href="/admin/">Open CMS</a>
       </div>
       <div class="stats-row" aria-label="Blog stats">
         <div class="stat">
@@ -63,11 +69,14 @@ const formatDate = (date: Date) =>
       {
         latest && (
           <p>
-            Latest: <strong>{latest.data.title}</strong> · {formatDate(latest.data.pubDate)}
+            Latest: <strong>{latest.title}</strong> · {formatDate(latest.publishedAt)}
           </p>
         )
       }
     </div>
+
+    {setupError && <div class="status error">{setupError}</div>}
+    {!isDbConfigured() && <div class="status">Configure DATABASE_URL and run migrations to load posts from Neon.</div>}
 
     <div class="writeup-grid">
       <aside class="filter-panel" aria-label="Writeup filters">
@@ -75,40 +84,46 @@ const formatDate = (date: Date) =>
         <input
           class="search-input"
           type="search"
-          placeholder="Search title, tag, target"
+          placeholder="Search title or description"
           data-search
           autocomplete="off"
         />
         <div class="tag-list" aria-label="Tag filters">
           <button class="tag active" type="button" data-tag="all">All</button>
-          {tags.map((tag) => <button class="tag" type="button" data-tag={tag}>{tag}</button>)}
+          <button class="tag" type="button" data-tag="writeup">writeup</button>
         </div>
       </aside>
 
       <div class="writeup-list" data-list>
         {
-          writeups.map((entry) => (
-            <a
-              class="writeup-card"
-              href={`/writeups/${entry.id}/`}
-              data-card
-              data-search-text={`${entry.data.title} ${entry.data.description} ${entry.data.target ?? ''} ${entry.data.category} ${entry.data.tags.join(' ')}`.toLowerCase()}
-              data-tags={entry.data.tags.join(',')}
-            >
-              <div class="meta-line">
-                <span>{formatDate(entry.data.pubDate)}</span>
-                <span>/</span>
-                <span>{entry.data.category}</span>
-                {entry.data.difficulty && <span class="difficulty">{entry.data.difficulty}</span>}
-                {entry.data.target && <span>{entry.data.target}</span>}
-              </div>
-              <h3>{entry.data.title}</h3>
-              <p>{entry.data.description}</p>
-              <div class="tag-list">
-                {entry.data.tags.map((tag) => <span class="tag">{tag}</span>)}
-              </div>
-            </a>
-          ))
+          writeups.length > 0 ? (
+            writeups.map((entry) => (
+              <a
+                class="writeup-card"
+                href={`/writeups/${entry.slug}/`}
+                data-card
+                data-search-text={`${entry.title} ${entry.description} notes writeup`.toLowerCase()}
+                data-tags="writeup"
+              >
+                <div class="meta-line">
+                  <span>{formatDate(entry.publishedAt)}</span>
+                  <span>/</span>
+                  <span>notes</span>
+                </div>
+                <h3>{entry.title}</h3>
+                <p>{entry.description}</p>
+                <div class="tag-list">
+                  <span class="tag">writeup</span>
+                </div>
+              </a>
+            ))
+          ) : (
+            <div class="writeup-card">
+              <div class="meta-line">No posts</div>
+              <h3>No published writeups yet</h3>
+              <p>Login at /admin, write a post, and publish it.</p>
+            </div>
+          )
         }
       </div>
     </div>

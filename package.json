@@ -1,5 +1,5 @@
 {
-  "name": "morgans",
+  "name": "lat",
   "type": "module",
   "version": "0.0.1",
   "engines": {
@@ -7,13 +7,16 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "cms:local": "npx --yes decap-server",
+    "db:migrate": "node scripts/migrate-db.mjs",
+    "db:seed": "node scripts/seed-writeups.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.6",
+    "@astrojs/vercel": "^10.0.7",
+    "@neondatabase/serverless": "^1.1.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.3.0",
     "astro": "^6.3.7",

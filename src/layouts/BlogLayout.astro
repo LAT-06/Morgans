@@ -4,7 +4,7 @@ interface Props {
   description?: string;
 }
 
-const siteName = 'Morgan Writeups';
+const siteName = 'LAT';
 const {
   title = siteName,
   description = 'Security writeups, exploit notes, and red-team research.',
@@ -14,7 +14,7 @@ const pageTitle = title === siteName ? siteName : `${title} | ${siteName}`;
 ---
 
 <!doctype html>
-<html lang="vi" data-theme="dark">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -35,17 +35,16 @@ const pageTitle = title === siteName ? siteName : `${title} | ${siteName}`;
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/" aria-label="Morgan Writeups home">
-        <span class="brand-mark" aria-hidden="true">MW</span>
+      <a class="brand" href="/" aria-label="LAT home">
+        <span class="brand-mark" aria-hidden="true">LAT</span>
         <span>
-          <strong>Morgan</strong>
+          <strong>LAT</strong>
           <small>writeups</small>
         </span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">
         <a href="/#writeups">Writeups</a>
-        <a href="/admin/">CMS</a>
-        <button id="themeToggle" class="icon-button" type="button" aria-label="Đổi theme">
+        <button id="themeToggle" class="icon-button" type="button" aria-label="Toggle theme">
           <span data-theme-icon aria-hidden="true">◐</span>
         </button>
       </nav>
@@ -54,7 +53,7 @@ const pageTitle = title === siteName ? siteName : `${title} | ${siteName}`;
       <slot />
     </main>
     <footer class="site-footer">
-      <span>© {new Date().getFullYear()} Morgan Writeups</span>
+      <span>© {new Date().getFullYear()} LAT</span>
       <span>Security notes for reproducible research.</span>
     </footer>
     <script is:inline>
@@ -489,6 +488,20 @@ const pageTitle = title === siteName ? siteName : `${title} | ${siteName}`;
   .writeup-list {
     display: grid;
     gap: 14px;
+  }
+
+  .status {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    color: var(--muted);
+  }
+
+  .status.error {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+    color: var(--accent);
   }
 
   .writeup-card {

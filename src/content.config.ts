@@ -8,7 +8,7 @@ const writeups = defineCollection({
     description: z.string().min(1).max(260),
     pubDate: z.coerce.date(),
     updatedDate: z.coerce.date().optional(),
-    author: z.string().default('Morgan'),
+    author: z.string().default('LAT'),
     tags: z.array(z.string()).default([]),
     category: z
       .enum(['web', 'pwn', 'crypto', 'reverse', 'forensics', 'osint', 'misc', 'notes'])
